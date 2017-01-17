@@ -48,27 +48,25 @@ def create_pool(loop, **kw):
 
 
 # 封装SQL select语句为 select函数
-def select(sql, args, size=None):
+async def select(sql, args, size=None):
     log(sql, args)
     global __pool
 
     # yield from会调用一个子协程，并直接返回调用的结果
     # yield from从连接池返回一个连接
-    with (yield from __pool) as coon:
-        cur = yield from coon.cursor(aiomysql.DictCursor)
+    async with __pool.get() as coon:
+        async with coon.cursor(aiomysql.DictCursor) as cur:
+            # SQL语句的占位符为？，MySQL的占位符为%s
+            await cur.execute(sql.replace('?', '%s'), args or ())
 
-        # 执行SQL语句
-        # SQL语句的占位符为？，MySQL的占位符为%s
-        yield from cur.execute(sql.replace('?', '%s'), args or ())
-
-        # 根据指定返回的size，返回查询结果
-        if size:
-            # 返回size条查询结果
-            rs = cur.fetchmany(size)
-        else:
-            # 返回所有查询结果
-            rs = cur.fetchall()
-        yield from cur.close()
+            # 根据指定返回的size，返回查询结果
+            if size:
+              # 返回size条查询结果
+              rs = await cur.fetchmany(size)
+            else:
+                # 返回所有查询结果
+                rs = await cur.fetchall()
+        #yield from cur.close()
         logging.info('rows return: %s' % (len(rs)))
         return rs
 
@@ -221,7 +219,7 @@ class ModelMetaclass(type):
         attrs['__select__'] = 'select `%s` , %s from `%s`' % (primarykey, ', '.join(escaped_fields), tableName)
         attrs['__insert__'] = 'insert into `%s` (%s, `%s`) values(%s)' % (
         tableName, ', '.join(escaped_fields), primarykey, create_args_string(len(escaped_fields) + 1))
-        attrs['__update__'] = 'update `%s` set `%s` where `%s` = ?' % (
+        attrs['__update__'] = 'update `%s` set %s where `%s` = ?' % (
         tableName, ', '.join(map(lambda f: '`%s` = ?' % (mappings.get(f).name or f), fields)), primarykey)
         attrs['__delete__'] = 'delete from `%s` where `%s`=?' % (tableName, primarykey)
 
@@ -265,8 +263,8 @@ class Model(dict, metaclass=ModelMetaclass):
 
     @classmethod
     # 类方法有类变量cls传入，从而可以用cls做一些相关的处理。并且有子类继承时，调用该类方法时，传入的类变量cls是子类而非父类
-    @asyncio.coroutine
-    def findAll(cls, where=None, args=None, **kw):
+    #@asyncio.coroutine
+    async def findAll(cls, where=None, args=None, **kw):
         '''find objects by where clause'''
         sql = [cls.__select__]
 
@@ -293,22 +291,22 @@ class Model(dict, metaclass=ModelMetaclass):
                 args.extend(limit)
             else:
                 raise ValueError('Invalid limit value: %s' % str(limit))
-        rs = yield from select(' '.join(sql), args)
+        rs = await select(' '.join(sql), args)
         return [cls(**r) for r in rs]
 
     #根据列名和条件查看数据库有多少条信息
     @classmethod
-    @asyncio.coroutine
-    def findNumber(cls, selectField, where=None, args=None):
+    #@asyncio.coroutine
+    async def findNumber(cls, selectField='*', where=None, args=None):
         '''find number by select and where'''
-        sql = ['select %s __num__ from `%s`' % (selectField, cls.__table__)]
+        sql = ['select count(%s) _num_ from `%s`' % (selectField, cls.__table__)]
         if where:
             sql.append('where')
             sql.append(where)
-        rs = yield from select(' '.join(sql), args, 1)
+        rs = await select(' '.join(sql), args, 1)
         if len(rs) == 0:
             return None
-        return rs[0]['__num__']
+        return rs[0]['_num_']
 
     #根据主键查找一个实例的信息
     @classmethod
@@ -339,6 +337,6 @@ class Model(dict, metaclass=ModelMetaclass):
     @asyncio.coroutine
     def remove(self):
         args = [self.getValue(self.__primary_key__)]
-        rows = yield from execute(self.__update__, args)
+        rows = yield from execute(self.__delete__, args)
         if rows != 1:
             logging.warning('failed to remove by primary key: affected rows: %s' % rows)
