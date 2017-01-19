@@ -1,6 +1,5 @@
-import logging;
+import logging;logging.basicConfig(level=logging.INFO)
 
-logging.basicConfig(level=logging.INFO)
 import asyncio, os, json, time
 from datetime import datetime
 
@@ -143,8 +142,8 @@ def init(loop):
     init_jinja2(app, filters=dict(datetime=datetime_filter))
     add_routes(app, 'handlers')
     add_static(app)
-    srv = yield from loop.create_server(app.make_handler(), '127.0.0.1', 8080)
-    logging.info('server started at http://127.0.0.1:8080')
+    srv = yield from loop.create_server(app.make_handler(), '127.0.0.1', 7000)
+    logging.info('server started at http://127.0.0.1:7000')
     return srv
 
 
