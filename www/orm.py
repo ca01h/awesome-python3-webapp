@@ -1,4 +1,5 @@
-# -*-coding:utf-8-*-
+#!/usr/bin/ python3
+# -*- coding: utf-8 -*-
 
 import logging, aiomysql
 
@@ -49,26 +50,26 @@ def create_pool(loop, **kw):
 
 # 封装SQL select语句为 select函数
 async def select(sql, args, size=None):
-    log(sql, args)
-    global __pool
+	log(sql, args)
+	global __pool
 
     # yield from会调用一个子协程，并直接返回调用的结果
     # yield from从连接池返回一个连接
-    async with __pool.get() as coon:
-        async with coon.cursor(aiomysql.DictCursor) as cur:
-            # SQL语句的占位符为？，MySQL的占位符为%s
-            await cur.execute(sql.replace('?', '%s'), args or ())
+	async with __pool.get() as coon:
+		async with coon.cursor(aiomysql.DictCursor) as cur:
+			# SQL语句的占位符为？，MySQL的占位符为%s
+			await cur.execute(sql.replace('?', '%s'), args or ())
 
             # 根据指定返回的size，返回查询结果
-            if size:
-              # 返回size条查询结果
-              rs = await cur.fetchmany(size)
-            else:
-                # 返回所有查询结果
-                rs = await cur.fetchall()
-        #yield from cur.close()
-        logging.info('rows return: %s' % (len(rs)))
-        return rs
+			if size:
+				# 返回size条查询结果
+				rs = await cur.fetchmany(size)
+			else:
+				# 返回所有查询结果
+				rs = await cur.fetchall()
+		#yield from cur.close()
+		logging.info('rows return: %s' % (len(rs)))
+		return rs
 
 
 # 封装INSERT, UPDATE, DELETE
@@ -76,25 +77,25 @@ async def select(sql, args, size=None):
 # 返回操作影响的行号
 # @asyncio.coroutine
 async def execute(sql, args, autocommit=True):
-    log(sql, args)
-    global __pool
-    async with __pool.get() as conn:
-        if not autocommit:
-            conn.begin()
-        try:
-            # execute类型的SQL操作返回的结果只有行号，所以不需要用DictCursor
-            async with conn.cursor(aiomysql.DictCursor) as cur:
-                await cur.execute(sql.replace('?', '%s'), args)
-                affectedLine = cur.rowcount
-                if not autocommit:
-                    await conn.commit()
-        except BaseException as e:
-            if not autocommit:
-                await conn.rollback()
-            raise e
-        finally:
-            conn.close()
-        return affectedLine
+	log(sql, args)
+	global __pool
+	async with __pool.get() as conn:
+		if not autocommit:
+			conn.begin()
+		try:
+			# execute类型的SQL操作返回的结果只有行号，所以不需要用DictCursor
+			async with conn.cursor(aiomysql.DictCursor) as cur:
+				await cur.execute(sql.replace('?', '%s'), args)
+				affectedLine = cur.rowcount
+				if not autocommit:
+					await conn.commit()
+		except BaseException as e:
+			if not autocommit:
+				await conn.rollback()
+			raise e
+		finally:
+			conn.close()
+		return affectedLine
 
 
 # 根据输入的参数生成占位符列表

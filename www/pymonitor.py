@@ -1,3 +1,5 @@
+#!/usr/bin/ python3
+# -*- coding: utf-8 -*-
 __author__ = 'Cao yihuai'
 
 import os, sys, time, subprocess
